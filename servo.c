@@ -20,7 +20,7 @@
 #include <string.h>
 
 #include <stdio.h>
-// #include <stdlib.h>
+#include <stdlib.h>
 
 #include "servo.h"
 
@@ -42,37 +42,42 @@ static on_execute_realtime_ptr on_execute_realtime;
 static char sbuf[65]; // string buffer for reports
 
 static bool can_map_ports = false, is_executing = false;
-static uint8_t n_ports;
-uint8_t port[N_SERVOS];
 
-#define MIN_ANGLE 0.0f
-#define MAX_ANGLE 180.0f
+#define DEFAULT_MIN_ANGLE 0.0f
+#define DEFAULT_MAX_ANGLE 180.0f
 
 //These are the min and max pulse width in microseconds that are expected by servo. These correspond to the minimum and maximum angle.
-#define MIN_PULSE_WIDTH 544e-6
-#define MAX_PULSE_WIDTH 2400e-6
-#define PWM_FREQ 50.0f
+#define DEFAULT_MIN_PULSE_WIDTH 544e-6
+#define DEFAULT_MAX_PULSE_WIDTH 2400e-6
+#define DEFAULT_PWM_FREQ 50.0f
 
-//Convert here to duty
-#define MIN_DUTY MIN_PULSE_WIDTH*PWM_FREQ
-#define MAX_DUTY MAX_PULSE_WIDTH*PWM_FREQ
-
-// static uint8_t n_servo = 0;
-// static const servo_ptrs_t *servos[N_SERVOS], *current_servo = NULL;
+static uint8_t n_servos = 0;
+static servo_t *servos, *current_servo = NULL;
 
 /// @brief 
-/// @param servo 
-/// @param angle 
+/// @param servo Servo number
+/// @param angle Angle (in degrees) to set servo to
 /// @return 
 static bool set_angle(uint8_t servo, float angle) {
     //Set the position/pwm
     //Servo position is defined from 0 to 180 degrees (left, right)
     //90 degree is the half duty cycle position
+    servo_t s = servos[servo];
+    servos[servo].angle = angle;
 
-    float duty = angle / MAX_ANGLE;
-    duty = MIN_DUTY + duty * (MAX_DUTY - MIN_DUTY);
-    hal.port.analog_out(port[servo], duty);
+    float duty = angle / s.max_angle;
+    duty = s.min_duty + duty * (s.max_duty - s.min_duty);
+    hal.port.analog_out(s.port, duty);
     return true;
+}
+
+static float get_angle(uint8_t servo) {
+    //Get the servo angle
+    if (servo < N_SERVOS) {
+        servo_t s = servos[servo];
+        return s.angle;
+    }
+    else return -1.0;
 }
 
 static user_mcode_t mcode_check (user_mcode_t mcode)
@@ -90,6 +95,8 @@ static status_code_t mcode_validate (parser_block_t *gc_block, parameter_words_t
         case 280:
         //Servo index
             if(gc_block->words.p && isnanf(gc_block->values.p))
+                state = Status_BadNumberFormat;
+            if(gc_block->words.p && (gc_block->values.p > N_SERVOS))
                 state = Status_BadNumberFormat;
         //Servo position, can be set to value or omitted for readout
             // if(gc_block->words.s && isnanf(gc_block->values.s))
@@ -119,9 +126,8 @@ static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
                     {
                         //check servo number exists
                         //If not return invalid
-                        if ((servo = gc_block->values.p) > N_SERVOS) {
+                        if ((servo = gc_block->values.p) >= N_SERVOS) {
                                 hal.stream.write("Servo number does not exist." ASCII_EOL);
-
                             }
                     }
 
@@ -133,8 +139,9 @@ static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
                     }
                     else {
                         //Reads the position/pwm
-                        int value = 0;
-                        sprintf(sbuf, "[Servo position :%d:%lx]" ASCII_EOL,  value,value);
+                        float value = get_angle(servo);
+                        if (value >= 0.0)
+                            sprintf(sbuf, "[Servo position: %5.2f degrees]" ASCII_EOL,  value);
                         hal.stream.write(sbuf);
                         
                     }
@@ -157,23 +164,42 @@ static void report_options (bool newopt)
         hal.stream.write("[PLUGIN:Servo v0.01]" ASCII_EOL);
 }
 
+bool init_servo_default(servo_t* servo) {
+    servo->pwm_data = malloc(sizeof(pwm_t));
+    servo->pwm_data->freq = DEFAULT_PWM_FREQ;
 
-void single_init() {
+    servo->max_angle = DEFAULT_MAX_ANGLE;
+    servo->min_angle = DEFAULT_MIN_ANGLE;
 
+    servo->angle = 0.0;
+
+    servo->min_pulse_width = DEFAULT_MIN_PULSE_WIDTH;
+    servo->max_pulse_width = DEFAULT_MAX_PULSE_WIDTH;
+
+    //Convert the pulse-widths to duty cycle equivalents
+    servo->min_duty = servo->min_pulse_width * servo->pwm_data->freq;
+    servo->max_duty = servo->max_pulse_width * servo->pwm_data->freq;
+    return true;
+}
+
+bool servo_claim_from_io() {
+    uint8_t n_ports;
     bool ok = (n_ports = ioports_available(Port_Analog, Port_Output)) >= N_SERVOS;
 
     // if(ok && !(can_map_ports = ioport_can_claim_explicit())) {
-
         // Driver does not support explicit pin claiming, claim the highest numbered ports instead.
-
+        // A bit clunky, since it doesnt consider already claimed analog pins
         uint_fast8_t idx = N_SERVOS;
-
         do {
             idx--;
-            if(!(ok = ioport_claim(Port_Analog, Port_Output, &port[idx], "Servo pin")))
-                port[idx] = 0xFF;
+            servos[idx].port = idx;
+            if(!(ok = ioport_claim(Port_Analog, Port_Output, &servos[idx].port, "Servo pin")))
+                servos[idx].port = 0xFF;
+            else 
+                init_servo_default(&servos[idx]);
         } while(idx);
     // }
+    return ok;
 }
 
 void servo_init (void)
@@ -183,10 +209,11 @@ void servo_init (void)
     hal.user_mcode.check = mcode_check;
     hal.user_mcode.validate = mcode_validate;
     hal.user_mcode.execute = mcode_execute;
+    servos = malloc(sizeof(servo_t) * N_SERVOS);
 
-    single_init();
-    hal.port.analog_out(port[0],0);
-    
+    if (servo_claim_from_io()) {
+        // hal.port.analog_out(servos[0].port,0);
+    }
 
     on_report_options = grbl.on_report_options;
     grbl.on_report_options = report_options;
