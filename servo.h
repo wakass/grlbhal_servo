@@ -14,6 +14,7 @@ void servo_init (void);
 
 typedef struct {
     uint8_t port; //Port number, referring to (analog) HAL port number
+    xbar_t* xport; //Handle to ioport xbar object, obtained at init
     
     float min_pulse_width;
     float max_pulse_width;

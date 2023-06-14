@@ -65,9 +65,7 @@ static bool set_angle(uint8_t servo, float angle) {
     servo_t s = servos[servo];
     servos[servo].angle = angle;
 
-    float duty = angle / s.max_angle;
-    duty = s.min_duty + duty * (s.max_duty - s.min_duty);
-    hal.port.analog_out(s.port, duty);
+    hal.port.analog_out(s.port, angle);
     return true;
 }
 
@@ -176,7 +174,7 @@ bool init_servo_default(servo_t* servo) {
     servo->min_pulse_width = DEFAULT_MIN_PULSE_WIDTH;
     servo->max_pulse_width = DEFAULT_MAX_PULSE_WIDTH;
 
-    //Convert the pulse-widths to duty cycle equivalents
+    //Convert the pulse-widths to "count" equivalents
     servo->min_duty = servo->min_pulse_width * servo->pwm_data->freq;
     servo->max_duty = servo->max_pulse_width * servo->pwm_data->freq;
     return true;
@@ -186,19 +184,41 @@ bool servo_claim_from_io() {
     uint8_t n_ports;
     bool ok = (n_ports = ioports_available(Port_Analog, Port_Output)) >= N_SERVOS;
 
-    // if(ok && !(can_map_ports = ioport_can_claim_explicit())) {
+    if(ioport_can_claim_explicit()) {
         // Driver does not support explicit pin claiming, claim the highest numbered ports instead.
         // A bit clunky, since it doesnt consider already claimed analog pins
         uint_fast8_t idx = N_SERVOS;
+        xbar_t *portinfo;
+
         do {
             idx--;
             servos[idx].port = idx;
-            if(!(ok = ioport_claim(Port_Analog, Port_Output, &servos[idx].port, "Servo pin")))
-                servos[idx].port = 0xFF;
-            else 
-                init_servo_default(&servos[idx]);
+            //We require a PWM port
+            if((portinfo = hal.port.get_pin_info(Port_Analog, Port_Output, idx))) {
+                if(!portinfo->cap.claimed && (portinfo->cap.pwm)) {
+                    if(!(ok = ioport_claim(Port_Analog, Port_Output, &servos[idx].port, "Servo pin")))
+                        servos[idx].port = 0xFF;
+                    else {
+                        //Initialize default values, and properly configure the pwm
+                        init_servo_default(&servos[idx]);
+                        xbar_t * port = hal.port.get_pin_info(Port_Analog, Port_Output, servos[idx].port);
+                        pwm_config_t config = {
+                            .freq_hz = 50.0f,
+                            .min = 0.0f,
+                            .max = 180.0f,
+                            .off_value = 0.0f,
+                            .min_value = DEFAULT_MIN_PULSE_WIDTH*DEFAULT_PWM_FREQ * 100.0f,
+                            .max_value = DEFAULT_MAX_PULSE_WIDTH*DEFAULT_PWM_FREQ * 100.0f, //Percents of duty cycle
+                            .invert = Off
+                        };
+
+                        port->config(port, (void*)&config);
+                    }
+                }
+            }
         } while(idx);
-    // }
+    }
+            
     return ok;
 }
 
