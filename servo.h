@@ -12,6 +12,10 @@ void servo_init (void);
 #include "driver.h"
 #endif
 
+bool set_angle(uint8_t servo, float angle);
+float get_angle(uint8_t servo);
+
+
 typedef struct {
     uint8_t port; //Port number, referring to (analog) HAL port number
     xbar_t* xport; //Handle to ioport xbar object, obtained at init

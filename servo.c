@@ -1,6 +1,6 @@
 /*
 
-  my_plugin.c - plugin for M280, Marlin style servo commands
+  servo.c - plugin for M280, Marlin style servo commands
 
   Part of grblHAL
 
@@ -58,7 +58,7 @@ static servo_t *servos, *current_servo = NULL;
 /// @param servo Servo number
 /// @param angle Angle (in degrees) to set servo to
 /// @return 
-static bool set_angle(uint8_t servo, float angle) {
+bool set_angle(uint8_t servo, float angle) {
     //Set the position/pwm
     //Servo position is defined from 0 to 180 degrees (left, right)
     //90 degree is the half duty cycle position
@@ -69,7 +69,7 @@ static bool set_angle(uint8_t servo, float angle) {
     return true;
 }
 
-static float get_angle(uint8_t servo) {
+float get_angle(uint8_t servo) {
     //Get the servo angle
     if (servo < N_SERVOS) {
         servo_t s = servos[servo];
