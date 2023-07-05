@@ -9,8 +9,9 @@
 #include "grbl/protocol.h"
 
 
-
-#define BLTOUCH_SERVO_PORT 0 
+#ifndef BLTOUCH_SERVO_PORT
+    #define BLTOUCH_SERVO_PORT 0 
+#endif
 //Output_Analog_Aux0
 
 void bltouchInit(){
