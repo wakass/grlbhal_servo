@@ -21,6 +21,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
+
 
 #include "servo.h"
 
@@ -53,6 +55,33 @@ static bool can_map_ports = false, is_executing = false;
 
 static uint8_t n_servos = 0;
 static servo_t *servos, *current_servo = NULL;
+
+
+// #define SERVO_DEBUG
+#define BUF_SIZE 256
+
+static void write_line_debug (const char *format, ...)
+{
+  #ifdef SERVO_DEBUG
+ 
+    char buffer[BUF_SIZE];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    int len = strlen(buffer);
+
+    int strlen_avail = BUF_SIZE - strlen(ASCII_EOL);
+
+    if (len <= strlen_avail)
+        strcat(buffer, ASCII_EOL);
+    else {
+        strcpy((buffer+strlen_avail-1), ASCII_EOL);
+        }
+    hal.stream.write(buffer);
+  #endif
+}
 
 /// @brief 
 /// @param servo Servo number
@@ -125,23 +154,20 @@ static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
                         //check servo number exists
                         //If not return invalid
                         if ((servo = gc_block->values.p) >= N_SERVOS) {
-                                hal.stream.write("Servo number does not exist." ASCII_EOL);
+                                write_line_debug("Servo number does not exist.");
                             }
                     }
 
                 if(gc_block->words.s) 
                     if ((angle = gc_block->values.s) >= 0.0f) {
-                        hal.stream.write("Setting servo position" ASCII_EOL);                        
+                        write_line_debug("Setting servo position");
                         set_angle(servo,angle);
-
                     }
                     else {
                         //Reads the position/pwm
                         float value = get_angle(servo);
                         if (value >= 0.0)
-                            sprintf(sbuf, "[Servo position: %5.2f degrees]" ASCII_EOL,  value);
-                        hal.stream.write(sbuf);
-                        
+                            write_line_debug("[Servo position: %5.2f degrees]",  value);
                     }
 
             break;

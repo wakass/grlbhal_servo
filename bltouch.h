@@ -2,6 +2,9 @@
 #define _BLTOUCH_H_
 
 #include "grbl/hal.h"
+#include <stdarg.h>
+#include <string.h>
+#include <stdio.h>
 
 void bltouchConfigure(bool is_probe_away, bool probing);
 bool bltouchCommand(uint16_t cmd, uint16_t ms);
@@ -11,16 +14,34 @@ bool bltouchDeploy();
 void bltouchReset();
 void bltouchClear();
 
-void bltouchNotifyStow();
+void bltouchNotifyTriggered();
 
 #define BLTOUCH_LIM_DEBOUNCE 40
+// #define BLTOUCH_DEBUG
 
-
+#define BUF_SIZE 256
 // Write CRLF terminated string to current stream
-static void write_line (char *s)
+static void write_line_debug (const char *format, ...)
 {
-    strcat(s, ASCII_EOL);
-    hal.stream.write(s);
+  #ifdef BLTOUCH_DEBUG
+ 
+    char buffer[BUF_SIZE];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    int len = strlen(buffer);
+
+    int strlen_avail = BUF_SIZE - strlen(ASCII_EOL);
+
+    if (len <= strlen_avail)
+        strcat(buffer, ASCII_EOL);
+    else {
+        strcpy((buffer+strlen_avail-1), ASCII_EOL);
+        }
+    hal.stream.write(buffer);
+  #endif
 }
 
 // typedef bool (*on_probe_start_ptr)(axes_signals_t axes, float *target, plan_line_data_t *pl_data);

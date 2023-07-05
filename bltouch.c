@@ -22,10 +22,8 @@ void bltouchInit(){
 
 //Hopefully only called on state-change
 void bltouchConfigure(bool is_probe_away, bool probing) {
-    char buf[50];
-    sprintf(buf,"Configure bltouch. var probing: {%d}",probing);
-    write_line(buf);
-
+    
+    write_line_debug("Configure bltouch. var probing: {%d}",probing);
 
     probe_state_t probe = hal.probe.get_state();
 
@@ -60,9 +58,9 @@ bool bltouchCommand(uint16_t cmd, uint16_t ms) {
     uint16_t current_angle = (uint16_t) get_angle(BLTOUCH_SERVO_PORT);
     // If the new command is the same, skip it (and the delay).
     // The previous write should've already delayed to detect the alarm.
-    char buf[50];
-    sprintf(buf,"Command bltouch: {%d}",cmd);
-    write_line(buf);
+
+    write_line_debug("Command bltouch: {%d}",cmd);
+
     if (cmd != current_angle) {
         set_angle(BLTOUCH_SERVO_PORT,(float)cmd);
         // protocol_execute_realtime();
@@ -76,27 +74,28 @@ bool bltouchCommand(uint16_t cmd, uint16_t ms) {
 //Wrapped functions
 void bltouchReset() {}
 
-void bltouchNotifyStow() {
-    (void) bltouchStow();
+void bltouchNotifyTriggered() {
+    write_line_debug("Notify triggered");
+    // (void) bltouchStow();
 }
 
 bool bltouchStow() {
-    write_line("Stow requested\n");
+    write_line_debug("Stow requested");
     if (_stow_query_alarm()){
         _reset();
         if (_stow_query_alarm()){
-            write_line("Stow failed\n");
+            write_line_debug("Stow failed");
             return true;
         }
     }
 }
 
 bool bltouchDeploy() {
-    write_line("Deploy requested\n");
+    write_line_debug("Deploy requested");
     if (_deploy_query_alarm()) {
         bltouchClear();
         if (_deploy_query_alarm()) {
-            write_line("Deploy failed\n");
+            write_line_debug("Deploy failed");
             return true;
         }
     }
