@@ -1,5 +1,5 @@
 # Servo 
-The servo plugin implements pwm control of servos. 
+The servo plugin implements pwm control of servos. It also provides a driver for the bltouch probe.
 
 The plugin allows abstraction of the pwm-pins and the use of the ```set_angle``` and ```get_angle``` functions. It also provides Marlin-style M280 commands for easy interfacing and manual control.
 
@@ -41,7 +41,7 @@ sets the servo angle
 ```M280 P0 S``` 
 prints the current set servo angle
 
-## BLtouch
+# BLtouch
 The bltouch plugin depends on the servos that are defined. This is because the module takes PWM-like servo commands.
 
 To enable use:
@@ -49,12 +49,12 @@ To enable use:
 
 This overwrites other probes that might be attached to the system.
 
-### Port
+## Port
 As the bltouch plugin relies on servo, the ports are defined in servo-number land. The plugin takes the 0th servo port by default.
 
 ```#define BLTOUCH_SERVO_PORT 0```
 
-### Probe pin 
+## Probe pin 
 This ofcourse should be defined to trigger the probe.
 
 ```#define PROBE_PIN           28```
